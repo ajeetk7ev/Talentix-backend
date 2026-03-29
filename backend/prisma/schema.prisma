@@ -4,14 +4,12 @@
 // Get a free hosted Postgres database in seconds: `npx create-db`
 
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
 }
-
 
 // ================= ENUMS =================
 
@@ -50,71 +48,125 @@ enum ReportReason {
 // ================= USER =================
 
 model User {
-  id            String   @id @default(uuid())
-  name          String
-  email         String   @unique
-  password      String?
-  role          Role     @default(USER)
-  isVerified    Boolean  @default(false)
+  id         String  @id @default(uuid())
+  name       String
+  email      String  @unique
+  password   String?
+  role       Role    @default(USER)
+  isVerified Boolean @default(false)
 
-  profile       Profile?
-  jobs          Job[]            @relation("PostedJobs")
-  applications  Application[]
-  comments      Comment[]
-  votes         Vote[]
-  reports       Report[]
-  resumes       Resume[]
+  profile          Profile?
+  jobs             Job[]         @relation("PostedJobs")
+  applications     Application[]
+  comments         Comment[]
+  votes            Vote[]
+  reports          Report[]
+  resumes          Resume[]
+  jobMatches       JobMatch[]
+  savedJobs        SavedJob[]
+  chatsAsRecruiter ChatRoom[]    @relation("RecruiterChats")
+  chatsAsCandidate ChatRoom[]    @relation("CandidateChats")
+  sentMessages     Message[]     @relation("SentMessages")
 
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id])
+
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  notifications Notification[]
 }
 
 // ================= PROFILE =================
 
 model Profile {
-  id          String   @id @default(uuid())
-  userId      String   @unique
-  bio         String?
-  location    String?
-  skills      String[]
-  experience  Int?
-  github      String?
-  linkedin    String?
+  id                String   @id @default(uuid())
+  userId            String   @unique
+  bio               String?
+  location          String?
+  skills            String[]
+  experience        Int?
+  github            String?
+  linkedin          String?
+  portfolio         String?
+  preferredLocation String[]
+  education         String?
+  currentSalary     Int?
+  expectedSalary    Int?
+  noticePeriod      String?
+  avatar            String?
 
-  user        User     @relation(fields: [userId], references: [id])
+  workExperiences WorkExperience[]
 
-  createdAt   DateTime @default(now())
+  user User @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+// ================= WORK EXPERIENCE =================
+
+model WorkExperience {
+  id          String    @id @default(uuid())
+  profileId   String
+  company     String
+  role        String
+  startDate   DateTime
+  endDate     DateTime?
+  description String?
+
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+}
+
+// ================= COMPANY =================
+
+model Company {
+  id       String  @id @default(uuid())
+  name     String
+  logo     String?
+  about    String?
+  website  String?
+  location String?
+
+  recruiters User[]
+  jobs       Job[]
+
+  createdAt DateTime @default(now())
 }
 
 // ================= JOB =================
 
 model Job {
-  id              String   @id @default(uuid())
-  title           String
-  description     String
-  company         String
-  location        String
-  salaryMin       Int?
-  salaryMax       Int?
-  jobType         JobType
-  isRemote        Boolean  @default(false)
+  id          String   @id @default(uuid())
+  title       String
+  description String
+  company     String
+  companyId   String?
+  companyRef  Company? @relation(fields: [companyId], references: [id])
+  location    String
+  salaryMin   Int?
+  salaryMax   Int?
+  jobType     JobType
+  isRemote    Boolean  @default(false)
 
-  postedById      String
-  postedBy        User     @relation("PostedJobs", fields: [postedById], references: [id])
+  postedById String
+  postedBy   User   @relation("PostedJobs", fields: [postedById], references: [id])
 
-  isCommunityPost Boolean  @default(false)
+  isCommunityPost Boolean @default(false)
   sourceUrl       String?
 
-  votes           Vote[]
-  comments        Comment[]
-  reports         Report[]
-  applications    Application[]
-  skills          JobSkill[]
+  votes        Vote[]
+  comments     Comment[]
+  reports      Report[]
+  applications Application[]
+  skills       JobSkill[]
+  jobMatches   JobMatch[]
+  savedBy      SavedJob[]
 
-  isVerified      Boolean  @default(false)
+  isVerified Boolean   @default(false)
+  isExpired  Boolean   @default(false)
+  expiresAt  DateTime?
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([location])
   @@index([jobType])
@@ -123,11 +175,11 @@ model Job {
 // ================= JOB SKILLS =================
 
 model JobSkill {
-  id      String @id @default(uuid())
-  jobId   String
-  skill   String
+  id    String @id @default(uuid())
+  jobId String
+  skill String
 
-  job     Job    @relation(fields: [jobId], references: [id])
+  job Job @relation(fields: [jobId], references: [id])
 
   @@index([skill])
 }
@@ -135,14 +187,16 @@ model JobSkill {
 // ================= APPLICATION =================
 
 model Application {
-  id        String   @id @default(uuid())
-  userId    String
-  jobId     String
+  id     String @id @default(uuid())
+  userId String
+  jobId  String
 
-  status    ApplicationStatus @default(APPLIED)
+  status   ApplicationStatus @default(APPLIED)
+  resumeId String?
 
-  user      User @relation(fields: [userId], references: [id])
-  job       Job  @relation(fields: [jobId], references: [id])
+  user   User    @relation(fields: [userId], references: [id])
+  job    Job     @relation(fields: [jobId], references: [id])
+  resume Resume? @relation(fields: [resumeId], references: [id])
 
   createdAt DateTime @default(now())
 
@@ -152,13 +206,13 @@ model Application {
 // ================= VOTE =================
 
 model Vote {
-  id      String   @id @default(uuid())
-  userId  String
-  jobId   String
-  type    VoteType
+  id     String   @id @default(uuid())
+  userId String
+  jobId  String
+  type   VoteType
 
-  user    User @relation(fields: [userId], references: [id])
-  job     Job  @relation(fields: [jobId], references: [id])
+  user User @relation(fields: [userId], references: [id])
+  job  Job  @relation(fields: [jobId], references: [id])
 
   @@unique([userId, jobId])
 }
@@ -166,13 +220,17 @@ model Vote {
 // ================= COMMENT =================
 
 model Comment {
-  id        String   @id @default(uuid())
-  userId    String
-  jobId     String
-  content   String
+  id       String  @id @default(uuid())
+  userId   String
+  jobId    String
+  content  String
+  parentId String?
 
-  user      User @relation(fields: [userId], references: [id])
-  job       Job  @relation(fields: [jobId], references: [id])
+  parent  Comment?  @relation("CommentReplies", fields: [parentId], references: [id])
+  replies Comment[] @relation("CommentReplies")
+
+  user User @relation(fields: [userId], references: [id])
+  job  Job  @relation(fields: [jobId], references: [id])
 
   createdAt DateTime @default(now())
 }
@@ -180,14 +238,14 @@ model Comment {
 // ================= REPORT =================
 
 model Report {
-  id        String   @id @default(uuid())
-  userId    String
-  jobId     String
-  reason    ReportReason
-  message   String?
+  id      String       @id @default(uuid())
+  userId  String
+  jobId   String
+  reason  ReportReason
+  message String?
 
-  user      User @relation(fields: [userId], references: [id])
-  job       Job  @relation(fields: [jobId], references: [id])
+  user User @relation(fields: [userId], references: [id])
+  job  Job  @relation(fields: [jobId], references: [id])
 
   createdAt DateTime @default(now())
 }
@@ -195,41 +253,42 @@ model Report {
 // ================= RESUME =================
 
 model Resume {
-  id        String   @id @default(uuid())
-  userId    String
-  fileUrl   String
+  id      String @id @default(uuid())
+  userId  String
+  fileUrl String
 
-  user      User     @relation(fields: [userId], references: [id])
-  analysis  ResumeAnalysis?
+  user     User            @relation(fields: [userId], references: [id])
+  analysis ResumeAnalysis?
 
-  createdAt DateTime @default(now())
+  createdAt    DateTime      @default(now())
+  applications Application[]
 }
 
 // ================= RESUME ANALYSIS =================
 
 model ResumeAnalysis {
-  id          String   @id @default(uuid())
-  resumeId    String   @unique
+  id       String @id @default(uuid())
+  resumeId String @unique
 
   extractedSkills String[]
   experienceYears Int?
   score           Float?
 
-  resume       Resume @relation(fields: [resumeId], references: [id])
+  resume Resume @relation(fields: [resumeId], references: [id])
 }
 
 // ================= JOB MATCH =================
 
 model JobMatch {
-  id        String   @id @default(uuid())
-  userId    String
-  jobId     String
+  id     String @id @default(uuid())
+  userId String
+  jobId  String
 
-  matchScore Float
+  matchScore    Float
   missingSkills String[]
 
-  user      User @relation(fields: [userId], references: [id])
-  job       Job  @relation(fields: [jobId], references: [id])
+  user User @relation(fields: [userId], references: [id])
+  job  Job  @relation(fields: [jobId], references: [id])
 
   @@unique([userId, jobId])
 }
@@ -237,13 +296,62 @@ model JobMatch {
 // ================= NOTIFICATION =================
 
 model Notification {
-  id        String   @id @default(uuid())
-  userId    String
-  title     String
-  message   String
-  isRead    Boolean  @default(false)
+  id      String  @id @default(uuid())
+  userId  String
+  title   String
+  message String
+  isRead  Boolean @default(false)
 
-  user      User @relation(fields: [userId], references: [id])
+  user User @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+// ================= SAVED JOB =================
+
+model SavedJob {
+  id     String @id @default(uuid())
+  userId String
+  jobId  String
+
+  user User @relation(fields: [userId], references: [id])
+  job  Job  @relation(fields: [jobId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, jobId])
+}
+
+// ================= CHAT ROOM =================
+
+model ChatRoom {
+  id          String  @id @default(uuid())
+  recruiterId String
+  candidateId String
+  jobId       String?
+
+  recruiter User @relation("RecruiterChats", fields: [recruiterId], references: [id])
+  candidate User @relation("CandidateChats", fields: [candidateId], references: [id])
+
+  messages Message[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([recruiterId, candidateId, jobId])
+}
+
+// ================= MESSAGE =================
+
+model Message {
+  id       String  @id @default(uuid())
+  chatId   String
+  senderId String
+  content  String
+  isRead   Boolean @default(false)
+
+  chat   ChatRoom @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  sender User     @relation("SentMessages", fields: [senderId], references: [id])
 
   createdAt DateTime @default(now())
 }
