@@ -1,5 +1,5 @@
 import { ApiError } from "../utils/ApiError.js";
-import { formattedJoiErrors } from "../utils/formattedErrors.js";
+import { formattedJoiErrors } from "../utils/formattedJoiErrors.js";
 
 export const validate = (schema) => (req, res, next) => {
   const { error } = schema.validate(req.body, { abortEarly: false });

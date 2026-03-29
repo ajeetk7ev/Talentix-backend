@@ -4,7 +4,7 @@ import env from '../config/env.js';
 
 export const generateToken = async (user) => {
      const payload = {
-        id:user._id,
+        id:user.id,
         email:user.email,
         role:user.role
      }
