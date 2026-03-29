@@ -1,0 +1,249 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+
+// ================= ENUMS =================
+
+enum Role {
+  USER
+  RECRUITER
+  ADMIN
+}
+
+enum JobType {
+  FULL_TIME
+  PART_TIME
+  INTERNSHIP
+  CONTRACT
+}
+
+enum ApplicationStatus {
+  APPLIED
+  IN_REVIEW
+  REJECTED
+  ACCEPTED
+}
+
+enum VoteType {
+  UP
+  DOWN
+}
+
+enum ReportReason {
+  SCAM
+  EXPIRED
+  MISLEADING
+  OTHER
+}
+
+// ================= USER =================
+
+model User {
+  id            String   @id @default(uuid())
+  name          String
+  email         String   @unique
+  password      String?
+  role          Role     @default(USER)
+  isVerified    Boolean  @default(false)
+
+  profile       Profile?
+  jobs          Job[]            @relation("PostedJobs")
+  applications  Application[]
+  comments      Comment[]
+  votes         Vote[]
+  reports       Report[]
+  resumes       Resume[]
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+// ================= PROFILE =================
+
+model Profile {
+  id          String   @id @default(uuid())
+  userId      String   @unique
+  bio         String?
+  location    String?
+  skills      String[]
+  experience  Int?
+  github      String?
+  linkedin    String?
+
+  user        User     @relation(fields: [userId], references: [id])
+
+  createdAt   DateTime @default(now())
+}
+
+// ================= JOB =================
+
+model Job {
+  id              String   @id @default(uuid())
+  title           String
+  description     String
+  company         String
+  location        String
+  salaryMin       Int?
+  salaryMax       Int?
+  jobType         JobType
+  isRemote        Boolean  @default(false)
+
+  postedById      String
+  postedBy        User     @relation("PostedJobs", fields: [postedById], references: [id])
+
+  isCommunityPost Boolean  @default(false)
+  sourceUrl       String?
+
+  votes           Vote[]
+  comments        Comment[]
+  reports         Report[]
+  applications    Application[]
+  skills          JobSkill[]
+
+  isVerified      Boolean  @default(false)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([location])
+  @@index([jobType])
+}
+
+// ================= JOB SKILLS =================
+
+model JobSkill {
+  id      String @id @default(uuid())
+  jobId   String
+  skill   String
+
+  job     Job    @relation(fields: [jobId], references: [id])
+
+  @@index([skill])
+}
+
+// ================= APPLICATION =================
+
+model Application {
+  id        String   @id @default(uuid())
+  userId    String
+  jobId     String
+
+  status    ApplicationStatus @default(APPLIED)
+
+  user      User @relation(fields: [userId], references: [id])
+  job       Job  @relation(fields: [jobId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, jobId])
+}
+
+// ================= VOTE =================
+
+model Vote {
+  id      String   @id @default(uuid())
+  userId  String
+  jobId   String
+  type    VoteType
+
+  user    User @relation(fields: [userId], references: [id])
+  job     Job  @relation(fields: [jobId], references: [id])
+
+  @@unique([userId, jobId])
+}
+
+// ================= COMMENT =================
+
+model Comment {
+  id        String   @id @default(uuid())
+  userId    String
+  jobId     String
+  content   String
+
+  user      User @relation(fields: [userId], references: [id])
+  job       Job  @relation(fields: [jobId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+// ================= REPORT =================
+
+model Report {
+  id        String   @id @default(uuid())
+  userId    String
+  jobId     String
+  reason    ReportReason
+  message   String?
+
+  user      User @relation(fields: [userId], references: [id])
+  job       Job  @relation(fields: [jobId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+// ================= RESUME =================
+
+model Resume {
+  id        String   @id @default(uuid())
+  userId    String
+  fileUrl   String
+
+  user      User     @relation(fields: [userId], references: [id])
+  analysis  ResumeAnalysis?
+
+  createdAt DateTime @default(now())
+}
+
+// ================= RESUME ANALYSIS =================
+
+model ResumeAnalysis {
+  id          String   @id @default(uuid())
+  resumeId    String   @unique
+
+  extractedSkills String[]
+  experienceYears Int?
+  score           Float?
+
+  resume       Resume @relation(fields: [resumeId], references: [id])
+}
+
+// ================= JOB MATCH =================
+
+model JobMatch {
+  id        String   @id @default(uuid())
+  userId    String
+  jobId     String
+
+  matchScore Float
+  missingSkills String[]
+
+  user      User @relation(fields: [userId], references: [id])
+  job       Job  @relation(fields: [jobId], references: [id])
+
+  @@unique([userId, jobId])
+}
+
+// ================= NOTIFICATION =================
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  title     String
+  message   String
+  isRead    Boolean  @default(false)
+
+  user      User @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+}
