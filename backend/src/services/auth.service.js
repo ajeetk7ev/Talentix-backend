@@ -24,7 +24,7 @@ export class AuthService {
                 name,
                 email,
                 password: hashedPassword,
-                role: role || 'USER'
+                role: 'CANDIDATE'
             },
             select: {
                 id: true,

@@ -15,8 +15,8 @@ export const signupSchema = joi.object({
         'string.empty': 'Password cannot be empty',
         'any.required': 'Password is required'
     }),
-    role: joi.string().valid('USER', 'RECRUITER', 'ADMIN').optional().messages({
-        'any.only': 'Role must be one of: USER, RECRUITER, ADMIN'
+    role: joi.string().valid('CANDIDATE', 'ADMIN').optional().messages({
+        'any.only': 'Role must be one of: CANDIDATE, ADMIN'
     })
 });
 

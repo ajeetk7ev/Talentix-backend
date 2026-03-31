@@ -14,9 +14,15 @@ datasource db {
 // ================= ENUMS =================
 
 enum Role {
-  USER
-  RECRUITER
+  CANDIDATE
   ADMIN
+  RECRUITER
+  USER
+}
+
+enum JobCategory {
+  PREMIUM
+  COMMUNITY
 }
 
 enum JobType {
@@ -45,6 +51,12 @@ enum ReportReason {
   OTHER
 }
 
+enum SubscriptionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 // ================= USER =================
 
 model User {
@@ -52,7 +64,7 @@ model User {
   name       String
   email      String  @unique
   password   String?
-  role       Role    @default(USER)
+  role       Role    @default(CANDIDATE)
   isVerified Boolean @default(false)
 
   profile          Profile?
@@ -64,12 +76,15 @@ model User {
   resumes          Resume[]
   jobMatches       JobMatch[]
   savedJobs        SavedJob[]
-  chatsAsRecruiter ChatRoom[]    @relation("RecruiterChats")
+  chatsAsAdmin     ChatRoom[]    @relation("AdminChats")
   chatsAsCandidate ChatRoom[]    @relation("CandidateChats")
   sentMessages     Message[]     @relation("SentMessages")
 
-  companyId String?
-  company   Company? @relation(fields: [companyId], references: [id])
+  planId     String?
+  plan       Plan?     @relation(fields: [planId], references: [id])
+  planExpiry DateTime?
+
+  subscriptionRequests SubscriptionRequest[]
 
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
@@ -116,6 +131,39 @@ model WorkExperience {
   profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
 }
 
+// ================= PLAN =================
+
+model Plan {
+  id        String   @id @default(uuid())
+  title     String   @unique
+  price     Int
+  duration  Int      // in months (e.g., 1 or 3)
+  features  String[]
+  users     User[]
+  
+  subscriptionRequests SubscriptionRequest[]
+
+  createdAt DateTime @default(now())
+}
+
+// ================= SUBSCRIPTION REQUEST =================
+
+model SubscriptionRequest {
+  id            String             @id @default(uuid())
+  userId        String
+  planId        String
+  transactionId String             @unique
+  screenshotUrl String?
+  status        SubscriptionStatus @default(PENDING)
+  amount        Int
+
+  user User @relation(fields: [userId], references: [id])
+  plan Plan @relation(fields: [planId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 // ================= COMPANY =================
 
 model Company {
@@ -126,7 +174,6 @@ model Company {
   website  String?
   location String?
 
-  recruiters User[]
   jobs       Job[]
 
   createdAt DateTime @default(now())
@@ -139,13 +186,15 @@ model Job {
   title       String
   description String
   company     String
-  companyId   String?
-  companyRef  Company? @relation(fields: [companyId], references: [id])
   location    String
   salaryMin   Int?
   salaryMax   Int?
   jobType     JobType
+  category    JobCategory @default(COMMUNITY)
   isRemote    Boolean  @default(false)
+
+  companyId String?
+  companyRel Company? @relation(fields: [companyId], references: [id])
 
   postedById String
   postedBy   User   @relation("PostedJobs", fields: [postedById], references: [id])
@@ -170,6 +219,7 @@ model Job {
 
   @@index([location])
   @@index([jobType])
+  @@index([category])
 }
 
 // ================= JOB SKILLS =================
@@ -326,11 +376,11 @@ model SavedJob {
 
 model ChatRoom {
   id          String  @id @default(uuid())
-  recruiterId String
+  adminId     String
   candidateId String
   jobId       String?
 
-  recruiter User @relation("RecruiterChats", fields: [recruiterId], references: [id])
+  admin     User @relation("AdminChats", fields: [adminId], references: [id])
   candidate User @relation("CandidateChats", fields: [candidateId], references: [id])
 
   messages Message[]
@@ -338,7 +388,7 @@ model ChatRoom {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([recruiterId, candidateId, jobId])
+  @@unique([adminId, candidateId, jobId])
 }
 
 // ================= MESSAGE =================

@@ -4,12 +4,13 @@ import { publishMessage } from '../config/rabbitmq.config.js';
 
 export class JobService {
     static async createJob(userId, role, data) {
-        if (role !== 'RECRUITER' && role !== 'USER') {
-            throw new ApiError(403, "Only recruiters or community users can post jobs.");
+        if (role !== 'ADMIN' && role !== 'CANDIDATE') {
+            throw new ApiError(403, "Invalid role for posting jobs");
         }
 
         const { title, description, company, location, jobType, skills, salaryMin, salaryMax, isRemote } = data;
-        const isCommunityPost = role === 'USER';
+        const category = role === 'ADMIN' ? 'PREMIUM' : 'COMMUNITY';
+        const isCommunityPost = role === 'CANDIDATE';
 
         const job = await prisma.job.create({
             data: {
@@ -21,10 +22,11 @@ export class JobService {
                 salaryMin,
                 salaryMax,
                 isRemote: isRemote || false,
+                category,
                 isCommunityPost,
                 postedById: userId,
                 skills: {
-                    create: skills.map(skill => ({ skill }))
+                    create: (skills || []).map(skill => ({ skill }))
                 }
             },
             include: {
@@ -35,23 +37,58 @@ export class JobService {
             }
         });
 
+        // Notification Logic for Premium Jobs
+        if (category === 'PREMIUM' && skills && skills.length > 0) {
+            // Find candidates with matching skills
+            // This is a simple implementation: find users who have at least one of the job skills in their profile
+            const matchingUsers = await prisma.user.findMany({
+                where: {
+                    role: 'CANDIDATE',
+                    profile: {
+                        skills: {
+                            hasSome: skills
+                        }
+                    }
+                },
+                select: { id: true }
+            });
+
+            if (matchingUsers.length > 0) {
+                const notifications = matchingUsers.map(user => ({
+                    userId: user.id,
+                    title: "New Premium Job Match",
+                    message: `A new job "${title}" at ${company} matches your skills!`,
+                }));
+
+                await prisma.notification.createMany({
+                    data: notifications
+                });
+            }
+        }
+
         // Fan-out notifications safely via background RabbitMQ worker
-        await publishMessage('job_alerts', {
-            jobId: job.id,
-            title: job.title,
-            company: job.company,
-            skills: skills
-        });
+        if (skills && skills.length > 0) {
+            await publishMessage('job_alerts', {
+                jobId: job.id,
+                title: job.title,
+                company: job.company,
+                skills: skills
+            });
+        }
 
         return job;
     }
 
     static async getAllJobs(query) {
-        const { page = 1, limit = 10, search, location, jobType, minSalary, maxSalary, sort = 'latest' } = query;
+        const { page = 1, limit = 10, search, location, jobType, category, minSalary, maxSalary, sort = 'latest' } = query;
         const skip = (parseInt(page) - 1) * parseInt(limit);
         const take = parseInt(limit);
 
         const whereClause = { isExpired: false };
+
+        if (category) {
+            whereClause.category = category;
+        }
 
         if (search) {
             whereClause.OR = [
